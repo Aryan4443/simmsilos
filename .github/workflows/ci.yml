@@ -1,0 +1,72 @@
+name: Branch Pipeline
+
+on:
+  pull_request:
+    branches: [main]
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_DB: simmsilos
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: secret
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+        ports:
+          - 5432:5432
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: pip install requests psycopg2-binary
+
+      - name: Build image
+        run: docker build -t simmsilos-auth .
+
+      - name: Run pipeline
+        env:
+          DB_HOST: localhost
+          DB_NAME: simmsilos
+          DB_USER: postgres
+          DB_PASSWORD: secret
+          JWT_SECRET: ci-secret
+          BRANCH: ${{ github.head_ref }}
+        run: |
+          python3 -c "
+          import os
+          from port_registry import spin_up
+          from checker import run_and_teardown
+
+          branch = os.getenv('BRANCH', 'ci')
+          port = spin_up(branch, 'simmsilos-auth', env_vars={
+              'DB_HOST': os.getenv('DB_HOST'),
+              'DB_NAME': os.getenv('DB_NAME'),
+              'DB_USER': os.getenv('DB_USER'),
+              'DB_PASSWORD': os.getenv('DB_PASSWORD'),
+              'JWT_SECRET': os.getenv('JWT_SECRET'),
+          })
+          passed = run_and_teardown(branch, port)
+          exit(0 if passed else 1)
+          "
+
+      - name: Upload results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: check-results
+          path: results/

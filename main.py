@@ -13,6 +13,7 @@ port = spin_up(branch, image, env_vars={
     "DB_NAME": "simmsilos",
     "DB_USER": "postgres",
     "DB_PASSWORD": "secret",
+    "REDIS_HOST": "simmsilos-redis",
 })
 passed = run_and_teardown(branch, port)
 

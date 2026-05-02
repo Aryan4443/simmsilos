@@ -21,6 +21,10 @@ export async function login(context: vscode.ExtensionContext): Promise<string | 
 }
 
 export async function logout(context: vscode.ExtensionContext) {
+  const token = await getToken(context);
+  if (token) {
+    try { await api.logout(token); } catch {}
+  }
   await context.secrets.delete(TOKEN_KEY);
   vscode.window.showInformationMessage("Logged out of SimmSilos");
 }

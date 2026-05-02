@@ -29,6 +29,10 @@ export async function getMe(token: string) {
   };
 }
 
+export async function logout(token: string) {
+  await client(token).post("/auth/logout");
+}
+
 export async function refreshToken(token: string) {
   const res = await client(token).post("/auth/refresh");
   return res.data as { token: string; role: string };

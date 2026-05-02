@@ -38,6 +38,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.login = login;
 exports.getMe = getMe;
+exports.logout = logout;
 exports.refreshToken = refreshToken;
 exports.listFiles = listFiles;
 exports.readFile = readFile;
@@ -62,6 +63,9 @@ async function login(username, password) {
 async function getMe(token) {
     const res = await client(token).get("/me");
     return res.data;
+}
+async function logout(token) {
+    await client(token).post("/auth/logout");
 }
 async function refreshToken(token) {
     const res = await client(token).post("/auth/refresh");

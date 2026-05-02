@@ -25,8 +25,11 @@ export class FilesProvider implements vscode.TreeDataProvider<FileItem> {
       return data.entries.map((e: { name: string; path: string; type: string }) =>
         new FileItem(e.name, e.path, e.type)
       );
-    } catch {
-      return [new FileItem("Failed to load files", "", "file")];
+    } catch (err: any) {
+      const msg = err?.response?.status === 404
+        ? "No branch assigned — ask admin"
+        : "Silo service unavailable — partner service not running";
+      return [new FileItem(msg, "", "file")];
     }
   }
 }

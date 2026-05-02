@@ -1,5 +1,6 @@
 import * as vscode from "vscode";
 import * as api from "./api";
+import { detectLanguage } from "./language";
 
 export const SCHEME = "simmsilos";
 
@@ -9,9 +10,8 @@ export class SiloFileSystemProvider implements vscode.FileSystemProvider {
 
   constructor(private getToken: () => Promise<string | undefined>) {}
 
-  // VS Code requires these — silo is read-only for dirs, writable for files
   watch() { return { dispose: () => {} }; }
-  stat(uri: vscode.Uri): vscode.FileStat {
+  stat(_uri: vscode.Uri): vscode.FileStat {
     return { type: vscode.FileType.File, ctime: 0, mtime: Date.now(), size: 0 };
   }
   readDirectory(): never { throw vscode.FileSystemError.NoPermissions(); }
@@ -23,7 +23,13 @@ export class SiloFileSystemProvider implements vscode.FileSystemProvider {
     const token = await this.getToken();
     if (!token) throw vscode.FileSystemError.NoPermissions("Not logged in");
     const { content } = await api.readFile(token, uri.path);
-    return Buffer.from(content, "utf8");
+    const bytes = Buffer.from(content, "utf8");
+    // set language after opening
+    setTimeout(async () => {
+      const doc = vscode.workspace.textDocuments.find(d => d.uri.toString() === uri.toString());
+      if (doc) await vscode.languages.setTextDocumentLanguage(doc, detectLanguage(uri.path));
+    }, 100);
+    return bytes;
   }
 
   async writeFile(uri: vscode.Uri, content: Uint8Array): Promise<void> {

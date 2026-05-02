@@ -17,6 +17,8 @@ export async function activate(context: vscode.ExtensionContext) {
   vscode.window.registerTreeDataProvider("simmsilos.tasks", tasksProvider);
   vscode.window.registerTreeDataProvider("simmsilos.files", filesProvider);
 
+  let _knownTaskIds = new Set<number>();
+
   async function boot() {
     const token = await auth.ensureFreshToken(context);
     if (!token) return;
@@ -27,10 +29,36 @@ export async function activate(context: vscode.ExtensionContext) {
       vscode.window.setStatusBarMessage(
         `SimmSilos: ${me.username} | branch: ${me.branch ?? "unassigned"}`, 5000
       );
+      return me;
     } catch {
       vscode.window.showErrorMessage("SimmSilos: failed to load profile");
     }
   }
+
+  async function pollTasks() {
+    const token = await auth.ensureFreshToken(context);
+    if (!token) return;
+    try {
+      const me = await api.getMe(token);
+      tasksProvider.update(me.tasks);
+
+      const newTasks = me.tasks.filter(t => !_knownTaskIds.has(t.id));
+      newTasks.forEach(t => {
+        vscode.window.showInformationMessage(
+          `SimmSilos: new task assigned → ${t.function} on ${t.branch}`,
+          "View Tasks"
+        ).then(action => {
+          if (action === "View Tasks") vscode.commands.executeCommand("simmsilos.tasks.focus");
+        });
+      });
+
+      _knownTaskIds = new Set(me.tasks.map(t => t.id));
+    } catch {}
+  }
+
+  // poll every 30 seconds for new task assignments
+  const poller = setInterval(pollTasks, 30_000);
+  context.subscriptions.push({ dispose: () => clearInterval(poller) });
 
   context.subscriptions.push(
     vscode.commands.registerCommand("simmsilos.login", async () => {
@@ -69,7 +97,8 @@ export async function activate(context: vscode.ExtensionContext) {
     })
   );
 
-  await boot();
+  const initial = await boot();
+  if (initial) _knownTaskIds = new Set(initial.tasks.map((t: api.Task) => t.id));
 }
 
 export function deactivate() {}

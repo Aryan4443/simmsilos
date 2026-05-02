@@ -37,6 +37,7 @@ exports.SiloFileSystemProvider = exports.SCHEME = void 0;
 exports.siloUri = siloUri;
 const vscode = __importStar(require("vscode"));
 const api = __importStar(require("./api"));
+const language_1 = require("./language");
 exports.SCHEME = "simmsilos";
 class SiloFileSystemProvider {
     constructor(getToken) {
@@ -44,9 +45,8 @@ class SiloFileSystemProvider {
         this._onDidChangeFile = new vscode.EventEmitter();
         this.onDidChangeFile = this._onDidChangeFile.event;
     }
-    // VS Code requires these — silo is read-only for dirs, writable for files
     watch() { return { dispose: () => { } }; }
-    stat(uri) {
+    stat(_uri) {
         return { type: vscode.FileType.File, ctime: 0, mtime: Date.now(), size: 0 };
     }
     readDirectory() { throw vscode.FileSystemError.NoPermissions(); }
@@ -58,7 +58,14 @@ class SiloFileSystemProvider {
         if (!token)
             throw vscode.FileSystemError.NoPermissions("Not logged in");
         const { content } = await api.readFile(token, uri.path);
-        return Buffer.from(content, "utf8");
+        const bytes = Buffer.from(content, "utf8");
+        // set language after opening
+        setTimeout(async () => {
+            const doc = vscode.workspace.textDocuments.find(d => d.uri.toString() === uri.toString());
+            if (doc)
+                await vscode.languages.setTextDocumentLanguage(doc, (0, language_1.detectLanguage)(uri.path));
+        }, 100);
+        return bytes;
     }
     async writeFile(uri, content) {
         const token = await this.getToken();

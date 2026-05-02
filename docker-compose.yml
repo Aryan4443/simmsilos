@@ -24,8 +24,7 @@ services:
       retries: 10
 
   auth:
-    image: ghcr.io/aryan4443/simmsilos/simmsilos-auth:latest
-    platform: linux/arm64
+    build: .
     container_name: simmsilos-feature-x
     networks: [simmsilos-net]
     ports:
@@ -46,14 +45,14 @@ services:
       redis:
         condition: service_healthy
 
-  nginx:
-    image: nginx:alpine
+  apache:
+    image: httpd:alpine
     container_name: simmsilos-gateway
     networks: [simmsilos-net]
     ports:
       - "80:80"
     volumes:
-      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./apache/httpd.conf:/usr/local/apache2/conf/httpd.conf:ro
     depends_on:
       - auth
 

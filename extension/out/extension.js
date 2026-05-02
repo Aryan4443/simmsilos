@@ -48,6 +48,7 @@ async function activate(context) {
     context.subscriptions.push(vscode.workspace.registerFileSystemProvider(siloFs_1.SCHEME, siloFs, { isCaseSensitive: true }));
     vscode.window.registerTreeDataProvider("simmsilos.tasks", tasksProvider);
     vscode.window.registerTreeDataProvider("simmsilos.files", filesProvider);
+    let _knownTaskIds = new Set();
     async function boot() {
         const token = await auth.ensureFreshToken(context);
         if (!token)
@@ -57,11 +58,33 @@ async function activate(context) {
             tasksProvider.update(me.tasks);
             filesProvider.refresh();
             vscode.window.setStatusBarMessage(`SimmSilos: ${me.username} | branch: ${me.branch ?? "unassigned"}`, 5000);
+            return me;
         }
         catch {
             vscode.window.showErrorMessage("SimmSilos: failed to load profile");
         }
     }
+    async function pollTasks() {
+        const token = await auth.ensureFreshToken(context);
+        if (!token)
+            return;
+        try {
+            const me = await api.getMe(token);
+            tasksProvider.update(me.tasks);
+            const newTasks = me.tasks.filter(t => !_knownTaskIds.has(t.id));
+            newTasks.forEach(t => {
+                vscode.window.showInformationMessage(`SimmSilos: new task assigned → ${t.function} on ${t.branch}`, "View Tasks").then(action => {
+                    if (action === "View Tasks")
+                        vscode.commands.executeCommand("simmsilos.tasks.focus");
+                });
+            });
+            _knownTaskIds = new Set(me.tasks.map(t => t.id));
+        }
+        catch { }
+    }
+    // poll every 30 seconds for new task assignments
+    const poller = setInterval(pollTasks, 30000);
+    context.subscriptions.push({ dispose: () => clearInterval(poller) });
     context.subscriptions.push(vscode.commands.registerCommand("simmsilos.login", async () => {
         await auth.login(context);
         await boot();
@@ -89,6 +112,8 @@ async function activate(context) {
         await api.updateTaskStatus(token, task.id, "in_progress");
         await boot();
     }));
-    await boot();
+    const initial = await boot();
+    if (initial)
+        _knownTaskIds = new Set(initial.tasks.map((t) => t.id));
 }
 function deactivate() { }

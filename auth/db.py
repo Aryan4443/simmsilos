@@ -1,9 +1,16 @@
 import os
 import psycopg2
+from psycopg2.pool import ThreadedConnectionPool
 from psycopg2.extras import RealDictCursor
+from contextlib import contextmanager
 
-def get_conn():
-    return psycopg2.connect(
+_pool: ThreadedConnectionPool | None = None
+
+def init_pool():
+    global _pool
+    _pool = ThreadedConnectionPool(
+        minconn=2,
+        maxconn=10,
         host=os.getenv("DB_HOST", "localhost"),
         port=os.getenv("DB_PORT", 5432),
         dbname=os.getenv("DB_NAME", "simmsilos"),
@@ -11,7 +18,20 @@ def get_conn():
         password=os.getenv("DB_PASSWORD", ""),
     )
 
+@contextmanager
+def get_conn():
+    conn = _pool.getconn()
+    try:
+        yield conn
+        conn.commit()
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        _pool.putconn(conn)
+
 def init_db():
+    init_pool()
     with get_conn() as conn:
         with conn.cursor() as cur:
             cur.execute("""
@@ -33,20 +53,20 @@ def init_db():
             """)
             cur.execute("""
                 CREATE TABLE IF NOT EXISTS branch_assignments (
-                    id         SERIAL PRIMARY KEY,
-                    username   TEXT NOT NULL REFERENCES users(username) ON DELETE CASCADE,
-                    branch     TEXT NOT NULL,
+                    id          SERIAL PRIMARY KEY,
+                    username    TEXT NOT NULL REFERENCES users(username) ON DELETE CASCADE,
+                    branch      TEXT NOT NULL,
                     assigned_at DOUBLE PRECISION NOT NULL,
                     UNIQUE(username)
                 )
             """)
             cur.execute("""
                 CREATE TABLE IF NOT EXISTS task_assignments (
-                    id         SERIAL PRIMARY KEY,
-                    username   TEXT NOT NULL REFERENCES users(username) ON DELETE CASCADE,
-                    branch     TEXT NOT NULL,
-                    function   TEXT NOT NULL,
-                    status     TEXT NOT NULL DEFAULT 'pending',
+                    id          SERIAL PRIMARY KEY,
+                    username    TEXT NOT NULL REFERENCES users(username) ON DELETE CASCADE,
+                    branch      TEXT NOT NULL,
+                    function    TEXT NOT NULL,
+                    status      TEXT NOT NULL DEFAULT 'pending',
                     assigned_at DOUBLE PRECISION NOT NULL
                 )
             """)

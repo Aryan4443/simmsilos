@@ -4,13 +4,15 @@ from fastapi import FastAPI, HTTPException, Depends
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from starlette.middleware.base import BaseHTTPMiddleware
 from pydantic import BaseModel
-import jwt, hashlib, os, time
+import jwt, hashlib, os, time, uuid
+import redis as redis_client
 from security import security_middleware
 from gateway import process_code_submission
 from ai_risk import analyze
 from audit import record, flush
 from db import init_db, get_conn, get_user, create_user, user_exists
 from sync import router as sync_router
+from bridge import router as bridge_router
 import silo_client
 
 @asynccontextmanager
@@ -22,9 +24,11 @@ async def lifespan(_):
 app = FastAPI(lifespan=lifespan)
 app.add_middleware(BaseHTTPMiddleware, dispatch=security_middleware)
 app.include_router(sync_router)
+app.include_router(bridge_router)
 security = HTTPBearer()
 
 SECRET = os.getenv("JWT_SECRET", "dev-secret")
+_redis = redis_client.Redis(host=os.getenv("REDIS_HOST", "localhost"), port=6379, decode_responses=True)
 
 def hash_password(pw):
     return hashlib.sha256(pw.encode()).hexdigest()
@@ -34,13 +38,22 @@ def make_token(user_id, role):
         "sub": user_id,
         "role": role,
         "branch": os.getenv("BRANCH", "unknown"),
-        "exp": time.time() + 3600  # 1 hour
+        "exp": time.time() + 3600,
+        "jti": str(uuid.uuid4()),
     }
     return jwt.encode(payload, SECRET, algorithm="HS256")
 
+def blacklist_token(payload: dict):
+    ttl = int(payload["exp"] - time.time())
+    if ttl > 0:
+        _redis.setex(f"blacklist:{payload['jti']}", ttl, "1")
+
 def decode_token(token):
     try:
-        return jwt.decode(token, SECRET, algorithms=["HS256"])
+        payload = jwt.decode(token, SECRET, algorithms=["HS256"])
+        if _redis.exists(f"blacklist:{payload['jti']}"):
+            raise HTTPException(status_code=401, detail="Token has been revoked")
+        return payload
     except jwt.ExpiredSignatureError:
         raise HTTPException(status_code=401, detail="Token expired")
     except jwt.InvalidTokenError:
@@ -98,6 +111,12 @@ def login(req: LoginRequest):
         raise HTTPException(status_code=401, detail="Invalid credentials")
     token = make_token(req.username, user["role"])
     return {"token": token, "role": user["role"]}
+
+@app.post("/auth/logout")
+def logout(user=Depends(get_current_user)):
+    blacklist_token(user)
+    record("logout", user["sub"], {})
+    return {"message": "Logged out"}
 
 @app.post("/auth/refresh")
 def refresh(user=Depends(get_current_user)):

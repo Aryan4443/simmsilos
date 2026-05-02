@@ -58,6 +58,13 @@ async function login(context) {
     }
 }
 async function logout(context) {
+    const token = await getToken(context);
+    if (token) {
+        try {
+            await api.logout(token);
+        }
+        catch { }
+    }
     await context.secrets.delete(TOKEN_KEY);
     vscode.window.showInformationMessage("Logged out of SimmSilos");
 }

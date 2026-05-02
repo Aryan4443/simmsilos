@@ -57,7 +57,7 @@ class SiloFileSystemProvider {
         const token = await this.getToken();
         if (!token)
             throw vscode.FileSystemError.NoPermissions("Not logged in");
-        const { content } = await api.readFile(token, uri.path);
+        const { content } = await api.readFile(token, uri.path.replace(/^\//, ""));
         const bytes = Buffer.from(content, "utf8");
         // set language after opening
         setTimeout(async () => {
@@ -71,12 +71,13 @@ class SiloFileSystemProvider {
         const token = await this.getToken();
         if (!token)
             throw vscode.FileSystemError.NoPermissions("Not logged in");
-        await api.writeFile(token, uri.path, Buffer.from(content).toString("utf8"));
+        await api.writeFile(token, uri.path.replace(/^\//, ""), Buffer.from(content).toString("utf8"));
         this._onDidChangeFile.fire([{ type: vscode.FileChangeType.Changed, uri }]);
         vscode.window.setStatusBarMessage(`SimmSilos: saved ${uri.path}`, 3000);
     }
 }
 exports.SiloFileSystemProvider = SiloFileSystemProvider;
 function siloUri(path) {
-    return vscode.Uri.parse(`${exports.SCHEME}://${path}`);
+    const normalPath = path.startsWith("/") ? path : `/${path}`;
+    return vscode.Uri.parse(`${exports.SCHEME}://${normalPath}`);
 }

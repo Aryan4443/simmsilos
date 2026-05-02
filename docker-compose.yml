@@ -45,6 +45,15 @@ services:
       redis:
         condition: service_healthy
 
+  mock-silo:
+    image: python:3.11-slim
+    container_name: simmsilos-vsc
+    networks: [simmsilos-net]
+    volumes:
+      - ./mock_silo.py:/app/mock_silo.py
+    working_dir: /app
+    command: sh -c "pip install flask -q && python mock_silo.py"
+
   apache:
     image: httpd:alpine
     container_name: simmsilos-gateway

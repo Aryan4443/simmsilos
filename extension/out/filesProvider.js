@@ -56,8 +56,11 @@ class FilesProvider {
                 return [];
             return data.entries.map((e) => new FileItem(e.name, e.path, e.type));
         }
-        catch {
-            return [new FileItem("Failed to load files", "", "file")];
+        catch (err) {
+            const msg = err?.response?.status === 404
+                ? "No branch assigned — ask admin"
+                : "Silo service unavailable — partner service not running";
+            return [new FileItem(msg, "", "file")];
         }
     }
 }

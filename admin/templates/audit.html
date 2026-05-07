@@ -1,0 +1,56 @@
+{% extends "base.html" %}
+{% block content %}
+<h1>Audit Log</h1>
+
+<div class="card" style="margin-bottom:16px">
+  <div class="form-row">
+    <input id="search" placeholder="Search event, user, branch..." oninput="filter()" style="flex:2"/>
+    <select id="eventFilter" onchange="filter()">
+      <option value="">All events</option>
+      <option value="login">login</option>
+      <option value="logout">logout</option>
+      <option value="register">register</option>
+      <option value="code_submission">code_submission</option>
+      <option value="ai_risk_check">ai_risk_check</option>
+      <option value="silo_write">silo_write</option>
+      <option value="silo_sync">silo_sync</option>
+      <option value="task_status_update">task_status_update</option>
+      <option value="admin_delete_user">admin_delete_user</option>
+    </select>
+  </div>
+</div>
+
+<div class="card">
+  <table id="auditTable">
+    <thead><tr><th>Event</th><th>User</th><th>Branch</th><th>Detail</th><th>Time</th></tr></thead>
+    <tbody>
+      {% for log in logs %}
+      <tr>
+        <td><span class="badge" style="background:#21262d;color:#8b949e">{{ log.event }}</span></td>
+        <td>{{ log.user }}</td>
+        <td>{{ log.branch }}</td>
+        <td style="font-size:12px;color:#8b949e;max-width:300px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ log.detail }}</td>
+        <td style="color:#8b949e;font-size:12px" class="ts" data-ts="{{ log.timestamp }}"></td>
+      </tr>
+      {% else %}
+      <tr><td colspan="5" style="color:#8b949e;text-align:center;padding:20px">No logs yet</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+<script>
+  document.querySelectorAll(".ts").forEach(el => {
+    el.textContent = new Date(el.dataset.ts * 1000).toLocaleString();
+  });
+
+  function filter() {
+    const q = document.getElementById("search").value.toLowerCase();
+    const ev = document.getElementById("eventFilter").value.toLowerCase();
+    document.querySelectorAll("#auditTable tbody tr").forEach(row => {
+      const text = row.textContent.toLowerCase();
+      row.style.display = (text.includes(q) && text.includes(ev)) ? "" : "none";
+    });
+  }
+</script>
+{% endblock %}

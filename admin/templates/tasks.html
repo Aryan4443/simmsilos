@@ -1,0 +1,73 @@
+{% extends "base.html" %}
+{% block content %}
+<h1>Task Assignments</h1>
+
+<div class="card">
+  <h2>Assign Task</h2>
+  <form method="POST" action="/tasks/assign">
+    <div class="form-row">
+      <select name="username" required>
+        <option value="">Select user...</option>
+        {% for user in users %}<option value="{{ user.username }}">{{ user.username }}</option>{% endfor %}
+      </select>
+      <input name="branch" placeholder="Branch (e.g. feature-x)" required/>
+      <input name="function" placeholder="Function/task name" required/>
+      <button type="submit" class="btn btn-primary">Assign</button>
+    </div>
+  </form>
+</div>
+
+<div class="card">
+  <h2>All Tasks</h2>
+  <div class="form-row" style="margin-bottom:16px">
+    <input id="search" placeholder="Search user, branch, function..." oninput="filter()" style="max-width:280px"/>
+    <select id="statusFilter" onchange="filter()">
+      <option value="">All statuses</option>
+      <option value="pending">Pending</option>
+      <option value="in_progress">In Progress</option>
+      <option value="done">Done</option>
+    </select>
+  </div>
+  <table id="taskTable">
+    <thead><tr><th>ID</th><th>Developer</th><th>Branch</th><th>Function</th><th>Status</th><th>Assigned</th><th>Update</th></tr></thead>
+    <tbody>
+      {% for task in tasks %}
+      <tr>
+        <td style="color:#8b949e">#{{ task.id }}</td>
+        <td>{{ task.username }}</td>
+        <td><code style="color:#58a6ff;background:#1c2128;padding:2px 8px;border-radius:4px">{{ task.branch }}</code></td>
+        <td>{{ task.function }}</td>
+        <td><span class="badge badge-{{ task.status }}">{{ task.status.replace('_', ' ') }}</span></td>
+        <td style="color:#8b949e;font-size:12px" class="ts" data-ts="{{ task.assigned_at }}"></td>
+        <td>
+          <form method="POST" action="/tasks/{{ task.id }}/status" style="display:flex;gap:6px">
+            <select name="status" style="padding:5px 8px;font-size:12px">
+              <option {% if task.status == 'pending' %}selected{% endif %} value="pending">pending</option>
+              <option {% if task.status == 'in_progress' %}selected{% endif %} value="in_progress">in progress</option>
+              <option {% if task.status == 'done' %}selected{% endif %} value="done">done</option>
+            </select>
+            <button class="btn btn-secondary" style="padding:5px 10px;font-size:12px">Update</button>
+          </form>
+        </td>
+      </tr>
+      {% else %}
+      <tr><td colspan="7" style="color:#8b949e;text-align:center;padding:20px">No tasks assigned yet</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+<script>
+  document.querySelectorAll(".ts").forEach(el => {
+    el.textContent = new Date(el.dataset.ts * 1000).toLocaleString();
+  });
+  function filter() {
+    const q = document.getElementById("search").value.toLowerCase();
+    const st = document.getElementById("statusFilter").value.toLowerCase();
+    document.querySelectorAll("#taskTable tbody tr").forEach(row => {
+      const text = row.textContent.toLowerCase();
+      row.style.display = (text.includes(q) && text.includes(st)) ? "" : "none";
+    });
+  }
+</script>
+{% endblock %}

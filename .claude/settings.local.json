@@ -1,7 +1,13 @@
 {
   "permissions": {
     "allow": [
-      "Bash(python3 -c \"from port_registry import assign; print\\(assign\\('simmsilos'\\)\\)\")"
+      "Bash(python3 -c \"from port_registry import assign; print\\(assign\\('simmsilos'\\)\\)\")",
+      "WebFetch(domain:raw.githubusercontent.com)",
+      "Bash(curl -fsSL https://raw.githubusercontent.com/JuliusBrussee/caveman/main/install.sh)",
+      "Bash(bash)",
+      "Bash(python3 -c \"import sys,json; d=json.load\\(sys.stdin\\); print\\(json.dumps\\({k:v for k,v in d.items\\(\\) if 'plugin' in k.lower\\(\\) or 'skill' in k.lower\\(\\) or 'marketplace' in k.lower\\(\\)}, indent=2\\)\\)\")",
+      "Bash(claude plugins *)",
+      "Bash(python3 -c \"import sys,json; d=json.load\\(sys.stdin\\); print\\(json.dumps\\(d, indent=2\\)\\)\")"
     ]
   }
 }

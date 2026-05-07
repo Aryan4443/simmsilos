@@ -13,11 +13,24 @@
   "main": "./out/extension.js",
   "contributes": {
     "commands": [
-      { "command": "simmsilos.login",   "title": "SimmSilos: Login" },
-      { "command": "simmsilos.logout",  "title": "SimmSilos: Logout" },
-      { "command": "simmsilos.refresh", "title": "SimmSilos: Refresh" },
-      { "command": "simmsilos.syncSilo","title": "SimmSilos: Sync Silo from Project" }
+      { "command": "simmsilos.login",          "title": "SimmSilos: Login" },
+      { "command": "simmsilos.logout",         "title": "SimmSilos: Logout" },
+      { "command": "simmsilos.refresh",        "title": "SimmSilos: Refresh" },
+      { "command": "simmsilos.syncSilo",       "title": "SimmSilos: Sync Silo from Project" },
+      { "command": "simmsilos.markDone",       "title": "Mark as Done" },
+      { "command": "simmsilos.markInProgress", "title": "Mark as In Progress" },
+      { "command": "simmsilos.viewTask",       "title": "View Task Details" },
+      { "command": "simmsilos.switchBranch",   "title": "SimmSilos: Switch Branch" },
+      { "command": "simmsilos.diffSilo",       "title": "Diff vs Project Master" }
     ],
+    "menus": {
+      "view/item/context": [
+        { "command": "simmsilos.markInProgress", "when": "view == simmsilos.tasks && viewItem == task", "group": "1_status" },
+        { "command": "simmsilos.markDone",       "when": "view == simmsilos.tasks && viewItem == task", "group": "1_status" },
+        { "command": "simmsilos.viewTask",       "when": "view == simmsilos.tasks && viewItem == task", "group": "2_details" },
+        { "command": "simmsilos.diffSilo",       "when": "view == simmsilos.files && viewItem == file", "group": "1_silo" }
+      ]
+    },
     "viewsContainers": {
       "activitybar": [
         { "id": "simmsilos", "title": "SimmSilos", "icon": "media/icon.svg" }
@@ -41,12 +54,13 @@
     }
   },
   "scripts": {
-    "compile": "tsc -p ./",
+    "compile": "tsc -p ./ && node esbuild.js",
     "watch": "tsc -watch -p ./"
   },
   "devDependencies": {
     "@types/node": "^20.0.0",
     "@types/vscode": "^1.85.0",
+    "esbuild": "^0.28.0",
     "typescript": "^5.3.0"
   },
   "dependencies": {

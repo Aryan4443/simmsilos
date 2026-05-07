@@ -1,11 +1,21 @@
 import os
 import requests
 from fastapi import APIRouter, HTTPException, Depends
+from security import validate_relative_path
+from sync import verify_service_token
 
-router = APIRouter(prefix="/bridge", tags=["bridge"])
+router = APIRouter(
+    prefix="/bridge",
+    tags=["bridge"],
+    dependencies=[Depends(verify_service_token)],
+)
 
 YOUR_API     = os.getenv("OWN_SERVICE_URL", "http://simmsilos-feature-x:3000")
 PARTNER_API  = os.getenv("PARTNER_SERVICE_URL", "http://simmsilos-admin:5000")
+
+def _service_headers():
+    token = os.getenv("SERVICE_TOKEN")
+    return {"X-Service-Token": token} if token else {}
 
 def _get(base: str, path: str, **kwargs):
     try:
@@ -28,22 +38,22 @@ def _post(base: str, path: str, **kwargs):
 @router.get("/users")
 def bridge_get_users():
     """Partner calls this to get all users from your side."""
-    return _get(YOUR_API, "/admin/users")
+    return _get(YOUR_API, "/sync/users", headers=_service_headers())
 
 @router.get("/audit")
 def bridge_get_audit():
     """Partner calls this to get audit logs from your side."""
-    return _get(YOUR_API, "/admin/audit")
+    return _get(YOUR_API, "/sync/audit", headers=_service_headers())
 
 @router.get("/tasks")
 def bridge_get_tasks():
     """Partner calls this to see all task assignments."""
-    return _get(YOUR_API, "/sync/assign/tasks")
+    return _get(YOUR_API, "/sync/assign/tasks", headers=_service_headers())
 
 @router.get("/branches")
 def bridge_get_branches():
     """Partner calls this to see all branch assignments."""
-    return _get(YOUR_API, "/sync/assign/branches")
+    return _get(YOUR_API, "/sync/assign/branches", headers=_service_headers())
 
 # ── partner endpoints exposed to your side ───────────────
 
@@ -55,6 +65,7 @@ def bridge_partner_health():
 @router.get("/partner/files")
 def bridge_partner_files(username: str, projectName: str, path: str = ""):
     """Get files from partner's silo service."""
+    path = validate_relative_path(path)
     return _get(PARTNER_API, "/files", params={
         "username": username,
         "projectName": projectName,

@@ -1,14 +1,16 @@
 from fastapi import APIRouter, HTTPException, Header
 from pydantic import BaseModel
 from db import get_conn
+from secrets import compare_digest
 import os, time
 
 router = APIRouter(prefix="/sync", tags=["sync"])
 
-SERVICE_TOKEN = os.getenv("SERVICE_TOKEN", "NKN8pN4iVtWAKAyJqwHb5Xp4n397MFiCghUZEWDW9bw")
-
 def verify_service_token(x_service_token: str = Header(...)):
-    if x_service_token != SERVICE_TOKEN:
+    service_token = os.getenv("SERVICE_TOKEN")
+    if not service_token:
+        raise HTTPException(status_code=503, detail="Service token is not configured")
+    if not compare_digest(x_service_token, service_token):
         raise HTTPException(status_code=403, detail="Invalid service token")
 
 

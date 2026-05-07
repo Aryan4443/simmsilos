@@ -206,7 +206,7 @@ curl -X POST http://YOUR_IP:3000/sync/assign/task \
 
 | Variable | Default | Description |
 |---|---|---|
-| `JWT_SECRET` | `dev-secret` | JWT signing secret |
+| `JWT_SECRET` | — | JWT signing secret; set to a long random value |
 | `SERVICE_TOKEN` | — | Service-to-service auth token |
 | `DB_HOST` | `localhost` | Postgres host |
 | `DB_NAME` | `simmsilos` | Postgres database |

@@ -4,19 +4,22 @@ from fastapi import FastAPI, HTTPException, Depends
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from starlette.middleware.base import BaseHTTPMiddleware
 from pydantic import BaseModel
+from passlib.context import CryptContext
 import jwt, hashlib, os, time, uuid
 import redis as redis_client
-from security import security_middleware
+from security import security_middleware, validate_relative_path
 from gateway import process_code_submission
 from ai_risk import analyze
 from audit import record, flush
-from db import init_db, get_conn, get_user, create_user, user_exists
+from db import init_db, get_conn, get_user, create_user, update_password, user_exists
 from sync import router as sync_router
 from bridge import router as bridge_router
 import silo_client
 
 @asynccontextmanager
-async def lifespan(_):
+async def lifespan(app):
+    from prometheus_fastapi_instrumentator import Instrumentator
+    Instrumentator().instrument(app).expose(app)
     init_db()
     yield
     flush(os.getenv("BRANCH", "unknown"))
@@ -27,11 +30,28 @@ app.include_router(sync_router)
 app.include_router(bridge_router)
 security = HTTPBearer()
 
-SECRET = os.getenv("JWT_SECRET", "dev-secret")
+SECRET = os.getenv("JWT_SECRET", "change-me-local-jwt-secret")
+if os.getenv("APP_ENV") == "production" and (
+    SECRET in {"dev-secret", "change-me-local-jwt-secret"} or len(SECRET) < 32
+):
+    raise RuntimeError("JWT_SECRET must be set to a strong value in production")
+
+pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 _redis = redis_client.Redis(host=os.getenv("REDIS_HOST", "localhost"), port=6379, decode_responses=True)
 
 def hash_password(pw):
+    return pwd_context.hash(pw)
+
+def _legacy_sha256(pw: str) -> str:
     return hashlib.sha256(pw.encode()).hexdigest()
+
+def verify_password(pw: str, stored_hash: str) -> tuple[bool, bool]:
+    if stored_hash == _legacy_sha256(pw):
+        return True, True
+    try:
+        return pwd_context.verify(pw, stored_hash), False
+    except ValueError:
+        return False, False
 
 def make_token(user_id, role):
     payload = {
@@ -107,8 +127,13 @@ def register(req: RegisterRequest):
 @app.post("/auth/login")
 def login(req: LoginRequest):
     user = get_user(req.username)
-    if not user or user["password"] != hash_password(req.password):
+    if not user:
         raise HTTPException(status_code=401, detail="Invalid credentials")
+    valid, needs_rehash = verify_password(req.password, user["password"])
+    if not valid:
+        raise HTTPException(status_code=401, detail="Invalid credentials")
+    if needs_rehash:
+        update_password(req.username, hash_password(req.password))
     token = make_token(req.username, user["role"])
     return {"token": token, "role": user["role"]}
 
@@ -243,11 +268,13 @@ def _get_assigned_project(username: str) -> str:
 @app.get("/silo/files")
 def silo_list_files(path: str = "", user=Depends(get_current_user)):
     project = _get_assigned_project(user["sub"])
+    path = validate_relative_path(path)
     return silo_client.list_files(user["sub"], project, path)
 
 @app.get("/silo/file")
 def silo_read_file(path: str, user=Depends(get_current_user)):
     project = _get_assigned_project(user["sub"])
+    path = validate_relative_path(path)
     return silo_client.read_file(user["sub"], project, path)
 
 class WriteFileRequest(BaseModel):
@@ -258,8 +285,9 @@ class WriteFileRequest(BaseModel):
 @app.post("/silo/file")
 def silo_write_file(req: WriteFileRequest, user=Depends(get_current_user)):
     project = _get_assigned_project(user["sub"])
-    result = silo_client.write_file(user["sub"], project, req.path, req.content, req.overwrite)
-    record("silo_write", user["sub"], {"project": project, "path": req.path})
+    path = validate_relative_path(req.path)
+    result = silo_client.write_file(user["sub"], project, path, req.content, req.overwrite)
+    record("silo_write", user["sub"], {"project": project, "path": path})
     return result
 
 @app.post("/silo/sync")

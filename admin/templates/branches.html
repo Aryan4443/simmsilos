@@ -1,0 +1,41 @@
+{% extends "base.html" %}
+{% block content %}
+<h1>Branch Assignments</h1>
+
+<div class="card">
+  <h2>Assign Branch</h2>
+  <form method="POST" action="/branches/assign">
+    <div class="form-row">
+      <select name="username" required>
+        <option value="">Select user...</option>
+        {% for user in users %}<option value="{{ user.username }}">{{ user.username }}</option>{% endfor %}
+      </select>
+      <input name="branch" placeholder="Branch name (e.g. feature-x)" required/>
+      <button type="submit" class="btn btn-primary">Assign</button>
+    </div>
+  </form>
+</div>
+
+<div class="card">
+  <h2>Current Assignments</h2>
+  <table>
+    <thead><tr><th>Developer</th><th>Branch</th><th>Assigned At</th><th>Action</th></tr></thead>
+    <tbody>
+      {% for a in assignments %}
+      <tr>
+        <td>{{ a.username }}</td>
+        <td><code style="color:#58a6ff;background:#1c2128;padding:2px 8px;border-radius:4px">{{ a.branch }}</code></td>
+        <td style="color:#8b949e;font-size:12px">{{ a.assigned_at | int }}</td>
+        <td>
+          <form method="POST" action="/branches/{{ a.username }}/unassign" onsubmit="return confirm('Unassign branch from {{ a.username }}?')">
+            <button class="btn btn-danger" style="padding:5px 10px;font-size:12px">Unassign</button>
+          </form>
+        </td>
+      </tr>
+      {% else %}
+      <tr><td colspan="4" style="color:#8b949e;text-align:center;padding:20px">No assignments yet</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

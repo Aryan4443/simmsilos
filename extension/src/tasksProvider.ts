@@ -12,6 +12,10 @@ export class TasksProvider implements vscode.TreeDataProvider<TaskItem> {
     this._onDidChangeTreeData.fire();
   }
 
+  get pendingCount(): number {
+    return this.tasks.filter(t => t.status !== "done").length;
+  }
+
   getTreeItem(item: TaskItem) { return item; }
 
   getChildren(): TaskItem[] {
@@ -22,7 +26,7 @@ export class TasksProvider implements vscode.TreeDataProvider<TaskItem> {
   }
 }
 
-class TaskItem extends vscode.TreeItem {
+export class TaskItem extends vscode.TreeItem {
   constructor(
     label: string,
     status: string,
@@ -30,11 +34,20 @@ class TaskItem extends vscode.TreeItem {
     public readonly task?: Task
   ) {
     super(label, collapsible);
-    this.description = status;
-    this.tooltip = status;
+    this.description = status.replace("_", " ");
+    this.tooltip = task
+      ? `${task.function}\nStatus: ${task.status}\nBranch: ${task.branch}\nAssigned: ${new Date(task.assigned_at * 1000).toLocaleString()}`
+      : "";
     this.contextValue = task ? "task" : "";
     this.iconPath = new vscode.ThemeIcon(
       status === "done" ? "check" : status === "in_progress" ? "sync~spin" : "circle-outline"
     );
+    if (task) {
+      this.command = {
+        command: "simmsilos.viewTask",
+        title: "View Task Details",
+        arguments: [task],
+      };
+    }
   }
 }

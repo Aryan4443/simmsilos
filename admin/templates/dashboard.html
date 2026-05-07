@@ -1,0 +1,39 @@
+{% extends "base.html" %}
+{% block content %}
+<h1>Dashboard <span id="last-refresh" style="font-size:13px;color:#8b949e;font-weight:400;margin-left:8px"></span></h1>
+<div class="stats">
+  <div class="stat"><div class="stat-val">{{ stats.total_users }}</div><div class="stat-label">Users</div></div>
+  <div class="stat"><div class="stat-val">{{ stats.assigned_branches }}</div><div class="stat-label">Branches Assigned</div></div>
+  <div class="stat"><div class="stat-val">{{ stats.total_tasks }}</div><div class="stat-label">Total Tasks</div></div>
+  <div class="stat"><div class="stat-val" style="color:#e3b341">{{ stats.pending }}</div><div class="stat-label">Pending</div></div>
+  <div class="stat"><div class="stat-val" style="color:#58a6ff">{{ stats.in_progress }}</div><div class="stat-label">In Progress</div></div>
+  <div class="stat"><div class="stat-val" style="color:#3fb950">{{ stats.done }}</div><div class="stat-label">Done</div></div>
+</div>
+
+<div class="card">
+  <h2>Recent Activity</h2>
+  <table>
+    <thead><tr><th>Event</th><th>User</th><th>Branch</th><th>Time</th></tr></thead>
+    <tbody>
+      {% for log in recent_logs %}
+      <tr>
+        <td>{{ log.event }}</td>
+        <td>{{ log.user }}</td>
+        <td>{{ log.branch }}</td>
+        <td style="color:#8b949e;font-size:12px" class="ts" data-ts="{{ log.timestamp }}"></td>
+      </tr>
+      {% else %}
+      <tr><td colspan="4" style="color:#8b949e;text-align:center;padding:20px">No activity yet</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+<script>
+  document.querySelectorAll(".ts").forEach(el => {
+    el.textContent = new Date(el.dataset.ts * 1000).toLocaleString();
+  });
+  document.getElementById("last-refresh").textContent = "— refreshed " + new Date().toLocaleTimeString();
+  setTimeout(() => location.reload(), 30000);
+</script>
+{% endblock %}

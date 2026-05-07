@@ -1,4 +1,5 @@
-import re, os, time
+import re, os
+from pathlib import PurePosixPath
 from fastapi import HTTPException, Request
 import redis
 
@@ -26,6 +27,18 @@ def scan_input(value: str):
     for pattern in THREAT_PATTERNS:
         if re.search(pattern, value, re.IGNORECASE):
             raise HTTPException(status_code=400, detail="Threat pattern detected in input")
+
+def validate_relative_path(path: str) -> str:
+    """Allow only normalized relative POSIX paths for silo file access."""
+    if not isinstance(path, str):
+        raise HTTPException(status_code=400, detail="path must be a string")
+    if "\x00" in path or ":" in path:
+        raise HTTPException(status_code=400, detail="Invalid silo path")
+    normalized = PurePosixPath(path.replace("\\", "/"))
+    parts = normalized.parts
+    if path.startswith("/") or any(part in ("..", "") for part in parts):
+        raise HTTPException(status_code=400, detail="Invalid silo path")
+    return normalized.as_posix() if normalized.as_posix() != "." else ""
 
 def scan_request(request: Request):
     check_rate_limit(request.client.host)

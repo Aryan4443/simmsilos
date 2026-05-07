@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>SimmSilos Admin</title>
+  <style>
+    *{box-sizing:border-box;margin:0;padding:0}
+    body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;background:#0f1117;color:#e2e8f0;min-height:100vh;display:flex}
+    nav{width:220px;background:#161b22;border-right:1px solid #30363d;padding:24px 0;display:flex;flex-direction:column;gap:4px;flex-shrink:0}
+    .nav-logo{padding:0 20px 20px;font-size:18px;font-weight:700;color:#58a6ff;border-bottom:1px solid #30363d;margin-bottom:8px}
+    nav a{display:block;padding:10px 20px;color:#8b949e;text-decoration:none;border-radius:0;font-size:14px;transition:all 0.15s}
+    nav a:hover,nav a.active{background:#21262d;color:#e2e8f0}
+    nav a.active{border-left:2px solid #58a6ff;color:#58a6ff}
+    .nav-bottom{margin-top:auto;padding:16px 20px;border-top:1px solid #30363d}
+    .nav-user{font-size:12px;color:#8b949e;margin-bottom:8px}
+    .main{flex:1;padding:32px;overflow-y:auto}
+    h1{font-size:22px;font-weight:600;margin-bottom:24px}
+    h2{font-size:16px;font-weight:600;margin-bottom:16px;color:#8b949e}
+    .card{background:#161b22;border:1px solid #30363d;border-radius:10px;padding:24px;margin-bottom:20px}
+    .stats{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:16px;margin-bottom:24px}
+    .stat{background:#161b22;border:1px solid #30363d;border-radius:10px;padding:20px;text-align:center}
+    .stat-val{font-size:28px;font-weight:700;color:#58a6ff}
+    .stat-label{font-size:12px;color:#8b949e;margin-top:4px;text-transform:uppercase;letter-spacing:0.5px}
+    table{width:100%;border-collapse:collapse;font-size:14px}
+    th{text-align:left;padding:10px 12px;border-bottom:1px solid #30363d;color:#8b949e;font-size:12px;text-transform:uppercase;letter-spacing:0.5px}
+    td{padding:10px 12px;border-bottom:1px solid #21262d}
+    tr:hover td{background:#1c2128}
+    .badge{display:inline-block;padding:2px 10px;border-radius:20px;font-size:12px;font-weight:600}
+    .badge-admin{background:#58a6ff22;color:#58a6ff}
+    .badge-developer{background:#3fb95022;color:#3fb950}
+    .badge-viewer{background:#8b949e22;color:#8b949e}
+    .badge-pending{background:#e3b34122;color:#e3b341}
+    .badge-in_progress{background:#58a6ff22;color:#58a6ff}
+    .badge-done{background:#3fb95022;color:#3fb950}
+    .btn{display:inline-block;padding:7px 14px;border-radius:6px;border:none;font-size:13px;font-weight:600;cursor:pointer;text-decoration:none;transition:opacity 0.15s}
+    .btn:hover{opacity:0.85}
+    .btn-primary{background:#238636;color:#fff}
+    .btn-danger{background:#da3633;color:#fff}
+    .btn-secondary{background:#21262d;color:#e2e8f0;border:1px solid #30363d}
+    input,select{background:#0d1117;color:#e2e8f0;border:1px solid #30363d;border-radius:6px;padding:8px 12px;font-size:13px;outline:none}
+    input:focus,select:focus{border-color:#58a6ff}
+    .form-row{display:flex;gap:12px;align-items:flex-end;flex-wrap:wrap}
+    .form-row input,.form-row select{flex:1;min-width:120px}
+    .flash{padding:12px 16px;border-radius:8px;margin-bottom:20px;font-size:14px;background:#1f2937;border:1px solid #374151;color:#d1d5db}
+  </style>
+</head>
+<body>
+<nav>
+  <div class="nav-logo">SimmSilos</div>
+  <a href="/dashboard" class="{% if request.path == '/dashboard' %}active{% endif %}">Dashboard</a>
+  <a href="/users"    class="{% if request.path == '/users' %}active{% endif %}">Users</a>
+  <a href="/branches" class="{% if request.path == '/branches' %}active{% endif %}">Branches</a>
+  <a href="/tasks"    class="{% if request.path == '/tasks' %}active{% endif %}">Tasks</a>
+  <a href="/audit"    class="{% if request.path == '/audit' %}active{% endif %}">Audit Log</a>
+  <div class="nav-bottom">
+    <div class="nav-user">{{ session.username }}</div>
+    <a href="/logout" class="btn btn-secondary" style="display:block;text-align:center">Logout</a>
+  </div>
+</nav>
+<div class="main">
+  {% with messages = get_flashed_messages() %}
+    {% if messages %}
+      {% for msg in messages %}<div class="flash">{{ msg }}</div>{% endfor %}
+    {% endif %}
+  {% endwith %}
+  {% block content %}{% endblock %}
+</div>
+</body>
+</html>

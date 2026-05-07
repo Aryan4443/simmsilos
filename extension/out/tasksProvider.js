@@ -33,7 +33,7 @@ var __importStar = (this && this.__importStar) || (function () {
     };
 })();
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.TasksProvider = void 0;
+exports.TaskItem = exports.TasksProvider = void 0;
 const vscode = __importStar(require("vscode"));
 class TasksProvider {
     constructor() {
@@ -44,6 +44,9 @@ class TasksProvider {
     update(tasks) {
         this.tasks = tasks;
         this._onDidChangeTreeData.fire();
+    }
+    get pendingCount() {
+        return this.tasks.filter(t => t.status !== "done").length;
     }
     getTreeItem(item) { return item; }
     getChildren() {
@@ -58,9 +61,19 @@ class TaskItem extends vscode.TreeItem {
     constructor(label, status, collapsible, task) {
         super(label, collapsible);
         this.task = task;
-        this.description = status;
-        this.tooltip = status;
+        this.description = status.replace("_", " ");
+        this.tooltip = task
+            ? `${task.function}\nStatus: ${task.status}\nBranch: ${task.branch}\nAssigned: ${new Date(task.assigned_at * 1000).toLocaleString()}`
+            : "";
         this.contextValue = task ? "task" : "";
         this.iconPath = new vscode.ThemeIcon(status === "done" ? "check" : status === "in_progress" ? "sync~spin" : "circle-outline");
+        if (task) {
+            this.command = {
+                command: "simmsilos.viewTask",
+                title: "View Task Details",
+                arguments: [task],
+            };
+        }
     }
 }
+exports.TaskItem = TaskItem;

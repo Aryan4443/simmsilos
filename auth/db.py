@@ -85,5 +85,13 @@ def create_user(username: str, password: str, role: str):
                 (username, password, role)
             )
 
+def update_password(username: str, password: str):
+    with get_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                "UPDATE users SET password = %s WHERE username = %s",
+                (password, username)
+            )
+
 def user_exists(username: str) -> bool:
     return get_user(username) is not None

@@ -31,19 +31,36 @@ services:
       - "3000:3000"
     environment:
       BRANCH: feature-x
-      JWT_SECRET: dev-secret
-      SERVICE_TOKEN: NKN8pN4iVtWAKAyJqwHb5Xp4n397MFiCghUZEWDW9bw
+      JWT_SECRET: ${JWT_SECRET:-change-me-local-jwt-secret}
+      SERVICE_TOKEN: ${SERVICE_TOKEN:-change-me-local-service-token}
       DB_HOST: postgres
       DB_NAME: simmsilos
       DB_USER: postgres
-      DB_PASSWORD: secret
+      DB_PASSWORD: ${DB_PASSWORD:-secret}
       REDIS_HOST: redis
-      SILO_SERVICE_URL: http://simmsilos-vsc:5000
+      SILO_SERVICE_URL: ${SILO_SERVICE_URL:-http://simmsilos-vsc:5000}
     depends_on:
       postgres:
         condition: service_healthy
       redis:
         condition: service_healthy
+
+  admin:
+    image: python:3.11-slim
+    container_name: simmsilos-admin
+    networks: [simmsilos-net]
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./admin:/app
+    working_dir: /app
+    command: sh -c "pip install flask requests -q && python app.py"
+    environment:
+      API_URL: http://simmsilos-feature-x:3000
+      SERVICE_TOKEN: ${SERVICE_TOKEN:-change-me-local-service-token}
+      ADMIN_SECRET: ${ADMIN_SECRET:-admin-dev-secret}
+    depends_on:
+      - auth
 
   mock-silo:
     image: python:3.11-slim
@@ -54,6 +71,27 @@ services:
     working_dir: /app
     command: sh -c "pip install flask -q && python mock_silo.py"
 
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: simmsilos-prometheus
+    networks: [simmsilos-net]
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+
+  grafana:
+    image: grafana/grafana:latest
+    container_name: simmsilos-grafana
+    networks: [simmsilos-net]
+    ports:
+      - "3001:3000"
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_PASSWORD:-admin}
+      GF_SECURITY_ADMIN_USER: admin
+    volumes:
+      - grafana-data:/var/lib/grafana
+
   apache:
     image: httpd:alpine
     container_name: simmsilos-gateway
@@ -62,8 +100,12 @@ services:
       - "80:80"
     volumes:
       - ./apache/httpd.conf:/usr/local/apache2/conf/httpd.conf:ro
+      - ./apache/branches.conf:/usr/local/apache2/conf/branches.conf:ro
     depends_on:
-      - auth
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
 
 networks:
   simmsilos-net:
@@ -71,3 +113,4 @@ networks:
 
 volumes:
   pgdata:
+  grafana-data:

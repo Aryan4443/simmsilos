@@ -1,11 +1,11 @@
 # auth/main.py
 from contextlib import asynccontextmanager
-from fastapi import FastAPI, HTTPException, Depends
+from fastapi import FastAPI, HTTPException, Depends, WebSocket, WebSocketDisconnect
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from starlette.middleware.base import BaseHTTPMiddleware
 from pydantic import BaseModel
 from passlib.context import CryptContext
-import jwt, hashlib, os, time, uuid
+import jwt, hashlib, os, time, uuid, asyncio
 import redis as redis_client
 from security import security_middleware, validate_relative_path
 from gateway import process_code_submission
@@ -29,6 +29,43 @@ app.add_middleware(BaseHTTPMiddleware, dispatch=security_middleware)
 app.include_router(sync_router)
 app.include_router(bridge_router)
 security = HTTPBearer()
+
+# ── WebSocket connection manager ──────────────────────────
+class _WSManager:
+    def __init__(self):
+        self._connections: dict[str, list[WebSocket]] = {}
+
+    async def connect(self, username: str, ws: WebSocket):
+        await ws.accept()
+        self._connections.setdefault(username, []).append(ws)
+
+    def disconnect(self, username: str, ws: WebSocket):
+        self._connections.get(username, []).remove(ws)
+
+    async def notify(self, username: str, payload: dict):
+        for ws in list(self._connections.get(username, [])):
+            try:
+                await ws.send_json(payload)
+            except Exception:
+                self.disconnect(username, ws)
+
+ws_manager = _WSManager()
+
+@app.websocket("/ws/tasks")
+async def task_ws(websocket: WebSocket, token: str):
+    try:
+        payload = decode_token(token)
+    except HTTPException:
+        await websocket.close(code=4001)
+        return
+    username = payload["sub"]
+    await ws_manager.connect(username, websocket)
+    try:
+        while True:
+            await asyncio.sleep(30)
+            await websocket.send_json({"type": "ping"})
+    except WebSocketDisconnect:
+        ws_manager.disconnect(username, websocket)
 
 SECRET = os.getenv("JWT_SECRET", "change-me-local-jwt-secret")
 if os.getenv("APP_ENV") == "production" and (
@@ -192,14 +229,29 @@ def dependencies(user=Depends(get_current_user)):
 
 @app.get("/my/branch")
 def my_branch(user=Depends(get_current_user)):
-    """Developer sees their assigned branch."""
     with get_conn() as conn:
         with conn.cursor() as cur:
-            cur.execute("SELECT branch FROM branch_assignments WHERE username = %s", (user["sub"],))
-            row = cur.fetchone()
-    if not row:
+            cur.execute("SELECT branch, active FROM branch_assignments WHERE username = %s ORDER BY active DESC, assigned_at DESC", (user["sub"],))
+            rows = cur.fetchall()
+    if not rows:
         raise HTTPException(status_code=404, detail="No branch assigned yet")
-    return {"username": user["sub"], "branch": row[0]}
+    return {
+        "username": user["sub"],
+        "active_branch": next((r[0] for r in rows if r[1]), rows[0][0]),
+        "branches": [{"branch": r[0], "active": r[1]} for r in rows]
+    }
+
+@app.post("/my/branch/switch")
+def switch_branch(body: dict, user=Depends(get_current_user)):
+    branch = body.get("branch")
+    with get_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute("UPDATE branch_assignments SET active = FALSE WHERE username = %s", (user["sub"],))
+            cur.execute("UPDATE branch_assignments SET active = TRUE WHERE username = %s AND branch = %s", (user["sub"], branch))
+            if cur.rowcount == 0:
+                raise HTTPException(status_code=404, detail="Branch not assigned to you")
+    record("branch_switch", user["sub"], {"branch": branch})
+    return {"status": "switched", "branch": branch}
 
 @app.get("/my/tasks")
 def my_tasks(user=Depends(get_current_user)):
@@ -288,7 +340,38 @@ def silo_write_file(req: WriteFileRequest, user=Depends(get_current_user)):
     path = validate_relative_path(req.path)
     result = silo_client.write_file(user["sub"], project, path, req.content, req.overwrite)
     record("silo_write", user["sub"], {"project": project, "path": path})
+    with get_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                "INSERT INTO silo_file_history (username, branch, path, content, saved_at) VALUES (%s, %s, %s, %s, %s)",
+                (user["sub"], project, path, req.content, time.time())
+            )
     return result
+
+@app.get("/silo/history")
+def silo_file_history(path: str, user=Depends(get_current_user)):
+    project = _get_assigned_project(user["sub"])
+    with get_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                "SELECT id, saved_at FROM silo_file_history WHERE username=%s AND branch=%s AND path=%s ORDER BY saved_at DESC LIMIT 20",
+                (user["sub"], project, path)
+            )
+            rows = cur.fetchall()
+    return {"path": path, "history": [{"id": r[0], "saved_at": r[1]} for r in rows]}
+
+@app.get("/silo/history/{history_id}")
+def silo_restore_version(history_id: int, user=Depends(get_current_user)):
+    with get_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                "SELECT path, content, saved_at FROM silo_file_history WHERE id=%s AND username=%s",
+                (history_id, user["sub"])
+            )
+            row = cur.fetchone()
+    if not row:
+        raise HTTPException(status_code=404, detail="Version not found")
+    return {"path": row[0], "content": row[1], "saved_at": row[2]}
 
 @app.post("/silo/sync")
 def silo_sync(user=Depends(get_current_user)):

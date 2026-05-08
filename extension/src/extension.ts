@@ -82,7 +82,23 @@ export async function activate(context: vscode.ExtensionContext) {
     } catch {}
   }
 
-  const poller = setInterval(pollTasks, 30_000);
+  // WebSocket for instant task notifications — fallback to polling if WS fails
+  let closeWs: (() => void) | undefined;
+  async function connectWs() {
+    const token = await auth.ensureFreshToken(context);
+    if (!token) return;
+    closeWs?.();
+    closeWs = api.connectTaskSocket(token, async (msg) => {
+      vscode.window.showInformationMessage(
+        `SimmSilos: new task → ${msg.function} on ${msg.branch}`, "View Tasks"
+      ).then(a => { if (a === "View Tasks") vscode.commands.executeCommand("simmsilos.tasks.focus"); });
+      await boot(false);
+    });
+  }
+  context.subscriptions.push({ dispose: () => closeWs?.() });
+
+  // fallback poll every 60s to catch anything WS missed
+  const poller = setInterval(pollTasks, 60_000);
   context.subscriptions.push({ dispose: () => clearInterval(poller) });
 
   async function doLogin(username: string, password: string): Promise<boolean> {
@@ -184,6 +200,7 @@ export async function activate(context: vscode.ExtensionContext) {
   );
 
   WelcomePanel.onRefresh = () => boot(true);
+  connectWs();
 
   const existingToken = await auth.getToken(context);
   if (!existingToken) {

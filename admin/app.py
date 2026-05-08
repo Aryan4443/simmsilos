@@ -90,13 +90,24 @@ def users():
 @app.route("/users/register", methods=["POST"])
 @login_required
 def register_user():
+    username = request.form["username"]
     try:
         requests.post(f"{API}/auth/register", json={
-            "username": request.form["username"],
+            "username": username,
             "password": request.form["password"],
             "role": request.form["role"],
         }, timeout=5).raise_for_status()
-        flash(f"User '{request.form['username']}' created")
+        flash(f"User '{username}' created")
+
+        branch = request.form.get("branch", "").strip()
+        if branch:
+            svc("post", "/sync/assign/branch", json={"username": username, "branch": branch})
+            flash(f"Branch '{branch}' assigned")
+
+        first_task = request.form.get("first_task", "").strip()
+        if first_task and branch:
+            svc("post", "/sync/assign/task", json={"username": username, "branch": branch, "function": first_task})
+            flash(f"Task '{first_task}' assigned")
     except Exception as e:
         flash(f"Error: {e}")
     return redirect(url_for("users"))

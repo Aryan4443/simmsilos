@@ -56,8 +56,18 @@ def init_db():
                     id          SERIAL PRIMARY KEY,
                     username    TEXT NOT NULL REFERENCES users(username) ON DELETE CASCADE,
                     branch      TEXT NOT NULL,
-                    assigned_at DOUBLE PRECISION NOT NULL,
-                    UNIQUE(username)
+                    active      BOOLEAN NOT NULL DEFAULT TRUE,
+                    assigned_at DOUBLE PRECISION NOT NULL
+                )
+            """)
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS silo_file_history (
+                    id          SERIAL PRIMARY KEY,
+                    username    TEXT NOT NULL REFERENCES users(username) ON DELETE CASCADE,
+                    branch      TEXT NOT NULL,
+                    path        TEXT NOT NULL,
+                    content     TEXT NOT NULL,
+                    saved_at    DOUBLE PRECISION NOT NULL
                 )
             """)
             cur.execute("""

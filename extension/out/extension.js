@@ -14648,6 +14648,7 @@ var require_api = __commonJS({
     exports2.writeFile = writeFile;
     exports2.syncSilo = syncSilo;
     exports2.updateTaskStatus = updateTaskStatus;
+    exports2.connectTaskSocket = connectTaskSocket;
     var axios_1 = __importDefault(require_axios());
     var vscode2 = __importStar2(require("vscode"));
     function baseUrl() {
@@ -14693,6 +14694,18 @@ var require_api = __commonJS({
     async function updateTaskStatus(token, taskId, status) {
       const res = await client(token).patch(`/my/tasks/${taskId}/status`, { status });
       return res.data;
+    }
+    function connectTaskSocket(token, onNewTask) {
+      const base = vscode2.workspace.getConfiguration("simmsilos").get("apiUrl", "http://localhost:3000");
+      const wsUrl = base.replace(/^http/, "ws") + `/ws/tasks?token=${encodeURIComponent(token)}`;
+      const ws = new WebSocket(wsUrl);
+      ws.onmessage = (e) => {
+        const msg = JSON.parse(e.data);
+        if (msg.type === "new_task")
+          onNewTask(msg);
+      };
+      ws.onerror = () => ws.close();
+      return () => ws.close();
     }
   }
 });
@@ -15662,7 +15675,22 @@ async function activate(context) {
     } catch {
     }
   }
-  const poller = setInterval(pollTasks, 3e4);
+  let closeWs;
+  async function connectWs() {
+    const token = await auth.ensureFreshToken(context);
+    if (!token)
+      return;
+    closeWs?.();
+    closeWs = api.connectTaskSocket(token, async (msg) => {
+      vscode.window.showInformationMessage(`SimmSilos: new task \u2192 ${msg.function} on ${msg.branch}`, "View Tasks").then((a) => {
+        if (a === "View Tasks")
+          vscode.commands.executeCommand("simmsilos.tasks.focus");
+      });
+      await boot(false);
+    });
+  }
+  context.subscriptions.push({ dispose: () => closeWs?.() });
+  const poller = setInterval(pollTasks, 6e4);
   context.subscriptions.push({ dispose: () => clearInterval(poller) });
   async function doLogin(username, password) {
     try {
@@ -15747,6 +15775,7 @@ async function activate(context) {
     }
   }));
   welcomePanel_1.WelcomePanel.onRefresh = () => boot(true);
+  connectWs();
   const existingToken = await auth.getToken(context);
   if (!existingToken) {
     loginPanel_1.LoginPanel.show(context, doLogin);

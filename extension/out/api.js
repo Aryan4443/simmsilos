@@ -45,6 +45,7 @@ exports.readFile = readFile;
 exports.writeFile = writeFile;
 exports.syncSilo = syncSilo;
 exports.updateTaskStatus = updateTaskStatus;
+exports.connectTaskSocket = connectTaskSocket;
 const axios_1 = __importDefault(require("axios"));
 const vscode = __importStar(require("vscode"));
 function baseUrl() {
@@ -90,4 +91,16 @@ async function syncSilo(token) {
 async function updateTaskStatus(token, taskId, status) {
     const res = await client(token).patch(`/my/tasks/${taskId}/status`, { status });
     return res.data;
+}
+function connectTaskSocket(token, onNewTask) {
+    const base = vscode.workspace.getConfiguration("simmsilos").get("apiUrl", "http://localhost:3000");
+    const wsUrl = base.replace(/^http/, "ws") + `/ws/tasks?token=${encodeURIComponent(token)}`;
+    const ws = new WebSocket(wsUrl);
+    ws.onmessage = (e) => {
+        const msg = JSON.parse(e.data);
+        if (msg.type === "new_task")
+            onNewTask(msg);
+    };
+    ws.onerror = () => ws.close();
+    return () => ws.close();
 }

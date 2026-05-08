@@ -83,20 +83,30 @@ def sync_update_role(username: str, body: dict, x_service_token: str = Header(..
 
 @router.post("/assign/branch")
 def assign_branch(payload: BranchAssignment, x_service_token: str = Header(...)):
-    """Admin assigns a branch to a developer."""
+    """Admin assigns a branch to a developer (supports multiple)."""
     verify_service_token(x_service_token)
     with get_conn() as conn:
         with conn.cursor() as cur:
             cur.execute("""
-                INSERT INTO branch_assignments (username, branch, assigned_at)
-                VALUES (%s, %s, %s)
-                ON CONFLICT (username) DO UPDATE SET branch = EXCLUDED.branch, assigned_at = EXCLUDED.assigned_at
+                INSERT INTO branch_assignments (username, branch, active, assigned_at)
+                VALUES (%s, %s, TRUE, %s)
             """, (payload.username, payload.branch, time.time()))
     return {"status": "assigned", "username": payload.username, "branch": payload.branch}
 
+@router.patch("/assign/branch/{username}/active")
+def set_active_branch(username: str, body: dict, x_service_token: str = Header(...)):
+    """Admin sets which branch is active for a developer."""
+    verify_service_token(x_service_token)
+    branch = body.get("branch")
+    with get_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute("UPDATE branch_assignments SET active = FALSE WHERE username = %s", (username,))
+            cur.execute("UPDATE branch_assignments SET active = TRUE WHERE username = %s AND branch = %s", (username, branch))
+    return {"status": "switched", "username": username, "branch": branch}
+
 @router.delete("/assign/branch/{username}")
 def unassign_branch(username: str, x_service_token: str = Header(...)):
-    """Admin removes a developer's branch assignment."""
+    """Admin removes all branch assignments for a developer."""
     verify_service_token(x_service_token)
     with get_conn() as conn:
         with conn.cursor() as cur:
@@ -105,12 +115,12 @@ def unassign_branch(username: str, x_service_token: str = Header(...)):
 
 @router.get("/assign/branches")
 def list_branch_assignments(x_service_token: str = Header(...)):
-    """Admin views all current branch assignments."""
+    """Admin views all branch assignments."""
     verify_service_token(x_service_token)
     with get_conn() as conn:
         with conn.cursor() as cur:
-            cur.execute("SELECT username, branch, assigned_at FROM branch_assignments")
-            return {"assignments": [{"username": r[0], "branch": r[1], "assigned_at": r[2]} for r in cur.fetchall()]}
+            cur.execute("SELECT username, branch, active, assigned_at FROM branch_assignments ORDER BY username, assigned_at DESC")
+            return {"assignments": [{"username": r[0], "branch": r[1], "active": r[2], "assigned_at": r[3]} for r in cur.fetchall()]}
 
 # ── task assignment ───────────────────────────────────────
 
@@ -126,6 +136,18 @@ def assign_task(payload: TaskAssignment, x_service_token: str = Header(...)):
             """, (payload.username, payload.branch, payload.function, time.time()))
             cur.execute("SELECT lastval()")
             task_id = cur.fetchone()[0]
+    # push instant notification over WebSocket if developer is connected
+    try:
+        from main import ws_manager
+        import asyncio
+        asyncio.get_event_loop().create_task(ws_manager.notify(payload.username, {
+            "type": "new_task",
+            "task_id": task_id,
+            "function": payload.function,
+            "branch": payload.branch,
+        }))
+    except Exception:
+        pass
     return {"status": "assigned", "task_id": task_id, "username": payload.username, "function": payload.function}
 
 @router.patch("/assign/task/{task_id}/status")

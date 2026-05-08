@@ -70,3 +70,21 @@ export interface Task {
   status: string;
   assigned_at: number;
 }
+
+export function connectTaskSocket(
+  token: string,
+  onNewTask: (payload: { task_id: number; function: string; branch: string }) => void
+): () => void {
+  const base = vscode.workspace.getConfiguration("simmsilos").get("apiUrl", "http://localhost:3000") as string;
+  const wsUrl = base.replace(/^http/, "ws") + `/ws/tasks?token=${encodeURIComponent(token)}`;
+  const ws = new WebSocket(wsUrl);
+
+  ws.onmessage = (e: MessageEvent) => {
+    const msg = JSON.parse(e.data as string);
+    if (msg.type === "new_task") onNewTask(msg);
+  };
+
+  ws.onerror = () => ws.close();
+
+  return () => ws.close();
+}

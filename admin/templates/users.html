@@ -5,7 +5,7 @@
 <div class="card">
   <h2>Register New User</h2>
   <form method="POST" action="/users/register">
-    <div class="form-row">
+    <div class="form-row" style="margin-bottom:12px">
       <input name="username" placeholder="Username" required/>
       <input name="password" type="password" placeholder="Password" required/>
       <select name="role">
@@ -13,8 +13,12 @@
         <option value="viewer">Viewer</option>
         <option value="admin">Admin</option>
       </select>
-      <button type="submit" class="btn btn-primary">Register</button>
     </div>
+    <div class="form-row" style="margin-bottom:12px">
+      <input name="branch" placeholder="Assign branch (optional, e.g. feature-x)"/>
+      <input name="first_task" placeholder="First task (optional)"/>
+    </div>
+    <button type="submit" class="btn btn-primary">Register &amp; Assign</button>
   </form>
 </div>
 
